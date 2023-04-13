@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<!DOCTYPE html><html><head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="initial-scale=1, maximum-scale=1, user-scalable=no">
+      <title>ArcGIS JavaScript API - Simple Map</title> 
+      <link rel="stylesheet" href="https://js.arcgis.com/4.26/esri/themes/light/main.css">
+      <script src="https://js.arcgis.com/4.26/"></script>
+      <style>
+      html,        
+      body {
+      padding: 0;
+      margin: 0;
+      height: 100%;
+      width: 100%;
+      }
+      
+      #mapViewDiv {
+      height: calc(100% - 50px);
+      width: 100%;
+      }
+      
+      #header {
+      height: 50px;
+      width: 100%;
+      background-color: #12183C;
+      color: #fff;
+      font-size: 24px;
+      font-family:"宋体";
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      }
+      
+      #srDiv{
+        height: 40px;
+        padding: 10px;
+      }
+      
+      #optionsDiv {
+      background-color: white;
+      color: black;
+      padding: 6px;
+      max-width: 400px;
+      }
+      
+      #basemapDiv {
+        flex-grow: 8;
+        width:300px;
+        background-color: #eee;
+        overflow: scroll;
+     }  
+     
+      #topbar {
+        background: #fff;
+        padding: 10px;
+      }
+
+      .action-button {
+        font-size: 16px;
+        background-color: transparent;
+        border: 1px solid #d3d3d3;
+        color: #6e6e6e;
+        height: 32px;
+        width: 32px;
+        text-align: center;
+        box-shadow: 0 0 1px rgba(0, 0, 0, 0.3);
+      }
+
+      .action-button:hover,
+      .action-button:focus {
+        background: #0079c1;
+        color: #e4e4e4;
+      }
+
+      .active {
+        background: #0079c1;
+        color: #e4e4e4;     
+      
+    }  
+      </style>
+      
+      <script>
+       require([
+        "esri/Map",
+        "esri/views/MapView",
+        "esri/layers/FeatureLayer",
+        "esri/WebMap",
+        "esri/widgets/LayerList",
+        "esri/widgets/ScaleBar",
+        "esri/widgets/Search",
+        "esri/widgets/Legend",
+        "esri/portal/Portal",
+        "esri/widgets/BasemapGallery",
+        "esri/widgets/BasemapGallery/support/PortalBasemapsSource",
+        "esri/widgets/Expand",
+        "esri/Graphic",
+        "esri/widgets/DistanceMeasurement2D",
+        "esri/widgets/AreaMeasurement2D"
+      ], function (
+        Map,
+        MapView,
+        FeatureLayer,
+        WebMap,
+        LayerList,
+        ScaleBar,
+        Legend,
+        Search,
+        Portal,
+        BasemapGallery,
+        PortalBasemapsSource,
+        Expand,
+        Graphic,
+        DistanceMeasurement2D, 
+        AreaMeasurement2D
+      ) {
+      var flayer = new FeatureLayer({url:"https://www.geosceneonline.cn/server/rest/services/工业烟尘排放统计/MapServer"});
+      
+     
+      
+      var map = new Map({
+      basemap: {
+            portalItem: {
+              id: "8d91bd39e873417ea21673e0fee87604" // nova basemap
+            }
+          }
+
+      });
+      
+      map.layers.add(flayer);
+      
+      
+      var view = new MapView({
+      container: "mapViewDiv",
+      map: map, 
+      center: [150, 40],
+      zoom: 4,
+      popup: {
+            autoOpenEnabled: false,
+            dockEnabled: true,
+            dockOptions: {
+              buttonEnabled: false,
+              breakpoint: false,
+              position: "bottom-right"// 视图右下角的停靠弹出窗口
+            }
+          }
+      });
+     //添加图例，放进拓展中
+     const legend = new Legend({
+     view: view,
+     });
+        view.ui.add(
+          new Expand({
+            view: view,
+            content: legend,
+            expanded: true
+          }),
+          "top-left"
+        );   
+       
+       
+      //添加图层列表，放进拓展中
+     let layerList = new LayerList({
+       view: view
+     });
+  
+        view.ui.add(
+          new Expand({
+            view: view,
+            content: layerList,
+            expanded: false
+          }),
+          "top-left"
+        );            
+   
+     //添加搜索框，放进拓展中
+     const searchWidget = new Search({
+       view: view
+     });
+        view.ui.add(
+          new Expand({
+            view: view,
+            content: searchWidget,
+            expanded:false
+          }),
+          "top-left"
+        );  
+        
+
+        //添加比例尺
+        const scaleBar = new ScaleBar({
+          view: view,
+          unit: "dual" 
+        });
+        view.ui.add(scaleBar, {
+          position: "bottom-left"
+        });
+     
+      
+        //添加底图库，划分右边区域
+        let basemapGallery = new BasemapGallery({
+          view: view,
+          container:basemapDiv
+        });
+
+        view.ui.add(basemapGallery, {
+          position: "central"
+        });              
+      
+      
+      //添加查询功能
+      view.ui.add("optionsDiv", "bottom-left"); 
+    
+      // 基本查询的附加查询字段最初设置为空
+        let distance = null;
+        let units = null;
+
+        //为鼠标点击创建图形
+        const pointGraphic = new Graphic({
+          symbol: {
+            type: "simple-marker", // autocasts as new SimpleMarkerSymbol()
+            color: [0, 0, 139],
+            outline: {
+              color: [255, 255, 255],
+              width: 1.5
+            }
+          }
+        });
+     // 为距离缓冲区创建图形
+        const bufferGraphic = new Graphic({
+          symbol: {
+            type: "simple-fill", // autocasts as new SimpleFillSymbol()
+            color: [173, 216, 230, 0.2],
+            outline: {
+              // autocasts as new SimpleLineSymbol()
+              color: [255, 255, 255],
+              width: 1
+            }
+          }
+        });
+
+        // 当查询类型改变时，设置适当的值
+        const queryOpts = document.getElementById("query-type");
+
+        queryOpts.addEventListener("change", () => {
+          switch (queryOpts.value) {
+            // values set for distance query
+            case "distance":
+              distance = 5;
+              units = "miles";
+              break;
+            default:
+              // Default set to basic query
+              distance = null;
+              units = null;
+          }
+        });
+        flayer.load().then(() => {
+          // Set the view extent to the data extent
+          view.extent = flayer.fullExtent;
+          flayer.popupTemplate = flayer.createPopupTemplate();
+        });
+
+        view.on("click", (event) => {
+          view.graphics.remove(pointGraphic);
+          if (view.graphics.includes(bufferGraphic)) {
+            view.graphics.remove(bufferGraphic);
+          }
+          queryFeatures(event);
+        });
+
+        function queryFeatures(screenPoint) {
+          const point = view.toMap(screenPoint);
+          flayer
+            .queryFeatures({
+              geometry: point,
+              // 如果选择了基本查询，距离和单位将为空
+              distance: distance,
+              units: units,
+              spatialRelationship: "intersects",
+              returnGeometry: false,
+              returnQueryGeometry: true,
+              outFields: ["*"]
+            })
+            .then((featureSet) => {
+              // 将图形位置设置为鼠标指针并添加到地图视图中
+              pointGraphic.geometry = point;
+              view.graphics.add(pointGraphic);
+              // open popup of query result
+              view.popup.open({
+                location: point,
+                features: featureSet.features,
+                featureMenuOpen: true
+              });
+              if (featureSet.queryGeometry) {
+                bufferGraphic.geometry = featureSet.queryGeometry;
+                view.graphics.add(bufferGraphic);
+              }
+            });
+        }
+ 
+     //添加测量功能
+     let activeWidget = null;
+     view.ui.add("topbar", "top-right");
+     document
+          .getElementById("distanceButton")
+          .addEventListener("click", function () {
+            setActiveWidget(null);
+            if (!this.classList.contains("active")) {
+              setActiveWidget("distance");
+            } else {
+              setActiveButton(null);
+            }
+          });
+
+        document
+          .getElementById("areaButton")
+          .addEventListener("click", function () {
+            setActiveWidget(null);
+            if (!this.classList.contains("active")) {
+              setActiveWidget("area");
+            } else {
+              setActiveButton(null);
+            }
+          });
+
+        function setActiveWidget(type) {
+          switch (type) {
+            case "distance":
+              activeWidget = new DistanceMeasurement2D({
+                view: view
+              });
+
+              // 跳过最初的 "新测量 "按钮
+              activeWidget.viewModel.start();
+
+              view.ui.add(activeWidget, "top-right");
+              setActiveButton(document.getElementById("distanceButton"));
+              break;
+            case "area":
+              activeWidget = new AreaMeasurement2D({
+                view: view
+              });
+
+              // 跳过最初的 "新测量 "按钮
+              activeWidget.viewModel.start();
+
+              view.ui.add(activeWidget, "top-right");
+              setActiveButton(document.getElementById("areaButton"));
+              break;
+            case null:
+              if (activeWidget) {
+                view.ui.remove(activeWidget);
+                activeWidget.destroy();
+                activeWidget = null;
+              }
+              break;
+          }
+        }
+
+        function setActiveButton(selectedButton) {
+          view.focus();
+          let elements = document.getElementsByClassName("active");
+          for (let i = 0; i < elements.length; i++) {
+            elements[i].classList.remove("active");
+          }
+          if (selectedButton) {
+            selectedButton.classList.add("active");
+          }
+        }
+        
+
+      
+      
+      });//function的后括号
+      </script>      
+      </head>
+      
+      <body>
+        <div id="header">2003-2019年中国各省市工业烟尘排放量</div>
+        <div id="mapViewDiv">
+          <div id="viewDiv"></div>
+          <div id="basemapDiv"></div>
+        </div>
+
+    <div id="optionsDiv" class="esri-widget">
+      <p>
+        Select a query type and click a point on the map to view the results.
+      </p>
+      <select id="query-type" class="esri-widget">
+        <option value="basic">Basic Query</option>
+        <option value="distance">Query By Distance</option>
+      </select>
+    </div>
+    
+    <div id="topbar">
+      <button
+        class="action-button esri-icon-measure-line"
+        id="distanceButton"
+        type="button"
+        title="Measure distance between two or more points"
+      ></button>
+      <button
+        class="action-button esri-icon-measure-area"
+        id="areaButton"
+        type="button"
+        title="Measure area"
+      ></button>
+    </div>
+    
+      </html>
